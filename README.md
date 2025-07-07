@@ -1,63 +1,32 @@
 # scalar
 
-Augmented reality from scratch in Scala: the program finds square fiducial
-markers in an image, works out where the camera is relative to each one,
-and draws a shaded 3D cube standing on the marker with the marker's
-coordinate axes. Everything is implemented by hand: thresholding,
-connected components, convex hulls, homographies, pose estimation, and a
-tiny rasteriser. No dependencies beyond the JDK (munit for the tests).
+Realidade aumentada do zero, em Scala: o programa acha marcadores quadrados numa imagem, calcula onde a câmera está em relação a cada um, e desenha um cubo 3D sombreado em cima do marcador com os eixos dele. Threshold, componentes conexos, casco convexo, homografia, estimativa de pose e um rasterizador minúsculo, tudo feito à mão. Só o JDK (munit pros testes).
+
+Eu queria entender o que um app de AR faz antes de pedir pra ARKit. Resposta: muita geometria de ensino médio e uma decomposição de matriz que parece bruxaria até você derivar.
 
 ```sh
-scala-cli run --server=false . -- demo demo.png            # synthetic scene with three markers, detected and augmented
-scala-cli run --server=false . -- marker 42 marker42.png   # printable marker with id 42
-scala-cli run --server=false . -- detect photo.png out.png # detect markers in a photo, draw cubes, print poses
-scala-cli run --server=false . -- synth 7 view.png 30 10 0 # synthetic camera view of marker 7
+scala-cli run --server=false . -- demo demo.png            # cena sintética com três marcadores, detectada e aumentada
+scala-cli run --server=false . -- marker 42 marker42.png   # marcador imprimível com id 42
+scala-cli run --server=false . -- detect foto.png saida.png # detecta numa foto, desenha os cubos, imprime as poses
+scala-cli run --server=false . -- synth 7 view.png 30 10 0 # vista sintética do marcador 7
 ```
 
-## Markers
+## Marcadores
 
-A marker is a 6x6 grid of cells: a black border, four inner corner cells
-that encode orientation (only the top-left one is white), and twelve cells
-that carry a 12-bit id, so there are 4096 markers. Print one with the
-`marker` command and leave a white margin around it.
+Um marcador é uma grade 6x6: borda preta, quatro células de canto que codificam orientação (só a de cima à esquerda é branca) e doze células com um id de 12 bits, então existem 4096. Imprime com o comando `marker` e deixa uma margem branca em volta.
 
 ## Pipeline
 
-1. **Threshold** (`Image.scala`): an adaptive threshold using an integral
-   image marks pixels darker than their neighbourhood, which copes with
-   uneven lighting.
-2. **Candidates** (`Detector.scala`): dark pixels are grouped into
-   connected components by flood fill; the boundary pixels of each component
-   go through Andrew's convex hull, and a hull is accepted as a
-   quadrilateral when its two farthest points and the two points farthest
-   from that diagonal explain every hull point.
-3. **Decode**: a homography from the unit square to the quad lets the
-   detector sample the 36 cell centres; the border must be black and
-   exactly one corner cell white, which fixes the rotation and yields the
-   id. The corners are reordered so the first one is the pattern's
-   top-left.
-4. **Pose** (`Pose.scala`): with a pinhole camera model (focal length
-   guessed as the image width) the marker-to-image homography is decomposed
-   into a rotation and translation (`H ~ K [r1 r2 t]`), orthonormalising
-   the rotation. Reprojection error is reported per marker.
-5. **Render** (`Render.scala`): a cube of the marker's size is projected
-   with the painter's algorithm and drawn with scanline polygon fill and
-   thick lines, along with the axes and the id.
+1. **Threshold** (`Image.scala`): adaptativo, com imagem integral, então funciona com iluminação desigual.
+2. **Candidatos** (`Detector.scala`): pixels escuros viram componentes por flood fill; a borda de cada componente passa pelo casco convexo de Andrew, e um casco vira quadrilátero quando os dois pontos mais distantes e os dois mais longe dessa diagonal explicam todos os outros. Os cantos são refinados em sub-pixel ajustando uma reta aos pixels de cada aresta e cruzando as retas vizinhas.
+3. **Decodificação**: uma homografia do quadrado unitário pro quadrilátero amostra os 36 centros de célula; a borda tem que ser preta e exatamente um canto branco, o que fixa a rotação e dá o id.
+4. **Pose** (`Pose.scala`): com um modelo de câmera pinhole (foco chutado como a largura da imagem), a homografia marcador→imagem é decomposta em rotação e translação (`H ~ K [r1 r2 t]`), com a rotação ortonormalizada. O erro de reprojeção é reportado por marcador.
+5. **Render** (`Render.scala`): um cubo do tamanho do marcador projetado com o algoritmo do pintor, polígonos preenchidos por scanline, os eixos e o id.
 
-`Synthetic.scala` renders camera views of markers at arbitrary poses by
-inverse-mapping pixels through the homography (with supersampling, a
-lighting gradient and noise). It doubles as the test oracle.
+`Synthetic.scala` renderiza vistas de câmera de marcadores em poses arbitrárias mapeando cada pixel de volta pela homografia (com supersampling, gradiente de luz e ruído). É o gerador de imagens de teste, e é por isso que dá pra testar detecção e pose sem câmera.
 
-## Tests
+Testes: `scala-cli test --server=false .` (álgebra linear, homografia de ida e volta, casco e ajuste de quadrilátero, codificação/decodificação em todas as rotações, rejeição de marcadores quebrados, o threshold sob gradiente forte, detecção e pose em várias vistas com cantos a menos de 1.6 px e translação dentro de poucos por cento, vários marcadores numa cena, resistência a falso positivo em ruído e marcadores espelhados, o cubo, e a linha de comando).
 
-`scala-cli test --server=false .` checks the linear algebra, homography round-trips,
-convex hull and quad fitting, marker encoding/decoding in all rotations,
-rejection of broken markers, the adaptive threshold under a strong
-gradient, detection and pose recovery for several views (corners within
-1.6 px, translation within a few percent), multiple markers in one scene,
-false-positive resistance on noise and mirrored markers, the cube
-rendering, and the command line.
+---
 
-## License
-
-MIT
+**EN:** augmented reality from scratch in Scala: adaptive thresholding, connected components, convex hulls, quad fitting with sub-pixel corner refinement, homography-based marker decoding (4096 ids), pose estimation by homography decomposition, and a software rasterizer that draws a shaded cube on each marker. A synthetic renderer generates the test images, so detection and pose are verified without a camera. MIT.
